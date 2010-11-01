@@ -50,6 +50,7 @@ mkClause _ _ _ _ _ = error "Cant handle such types"
 mkBody rec name v (ConT n) | n == name = rec v
 mkBody _ _ v (ConT _) = varE v
 mkBody _ _ v (VarT _) = varE v
+mkBody rec name v (AppT t1 t2) = mkBody rec name v t1
 mkBody _ _ _ _ = error "Cant handle such types"
 
 {-

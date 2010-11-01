@@ -16,8 +16,8 @@ data Tree a = L | T a (Tree a) (Tree a)
 
 
 $(mkCata ''Nat)
--- $(mkCata ''List)
--- $(mkCata ''Tree)
+$(mkCata ''List)
+$(mkCata ''Tree)
 $(mkCata ''Maybe)
 $(mkCata ''Bool)
 
