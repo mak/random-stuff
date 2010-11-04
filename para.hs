@@ -20,10 +20,9 @@ paraN (S n) f b = f n $ paraN n f b
 hyloN f g s p a | p a = f $ hyloN f g s p $ s a
 hyloN _ g _ _ _ = g
 
-cataN' n f b = hyloN f b id isZero n
+cataN' n f b = hyloN f b id (not.isZero) n
 anaN' n s p = hyloN S Z s p n
 -- paraN' n f b = hyloN f b (id &&& id) isZero n
-
 
 isZero Z = True
 isZero (S _) = False
