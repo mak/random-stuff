@@ -3,6 +3,7 @@
 import Control.Arrow
 import System.Random
 import Criterion.Main
+import Data.Monoid
 
 newtype Fix f  = In {out :: f (Fix f) }
 
@@ -40,7 +41,7 @@ histo phi = phi . fmap (ana $ forkFx (histo phi) out ) . out
 histo2 phi = outl . cata (In . forkFx phi id)
 
 
-fib,fib1,fib2,fib3,fib4 :: Int -> Int
+fib,fib1,fib2,fib3,fib3',fib4 :: Int -> Int
 fib = (fibs !! ) where
     fibs = 1 : 1 : zipWith (+) (tail fibs) fibs
 
@@ -48,18 +49,24 @@ fib1 = snd . cata phi . fromInt where
     phi Z = (1,1)
     phi (S n) = snd &&& uncurry (+) $ n
 
+getN 1 mem = outl mem
+getN n mem = case outr mem of
+                Z -> Nothing
+                S m -> getN (n-1) m
 
-fib2 = histo phi . fromInt where
-    phi Z = 1
-    phi (S x) = case outr x of
-                  Z -> 1
-                  S y -> outl x + outl y
+fib2 =  getSum . maybe undefined id . histo phi . fromInt where
+    phi Z = Just $ Sum 1
+    phi (S x) = getN 1 x `mappend` getN 2 x
 
 fib3 = histo2 phi . fromInt where
     phi Z = 1
     phi (S x) = case outr x of
                   Z -> 1
                   S y -> outl x + outl y
+
+fib3' = getSum . maybe undefined id . histo2 phi . fromInt where
+    phi Z = Just $ Sum 1
+    phi (S x) = getN 1 x `mappend` getN 2 x
 
 fib4 = hylo phi psi where
     psi 0 = L 1
@@ -88,5 +95,6 @@ main = do
                   ,bench "fib1 - catamorphic pair-endoding" .  nf fib1
                   ,bench "fib2 - histo - straighforwad def" . nf fib2
                   ,bench "fib3 - histo - catamophic def"  . nf fib3
+                  ,bench "fib3' - histo - catamophic def - nice api" .nf fib3'
                   ,bench "fib4 - hylomorpic definition on leaf-trees" .nf fib4
                   ]
