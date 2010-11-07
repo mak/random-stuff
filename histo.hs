@@ -5,6 +5,8 @@ import System.Random
 import Criterion.Main
 import Data.Monoid
 
+
+
 newtype Fix f  = In {out :: f (Fix f) }
 
 -- haskell use biggest fix point
@@ -105,4 +107,5 @@ main = do
                   ,bench "fib3 - histo - catamophic def"  . nf fib3
                   ,bench "fib3' - histo - catamophic def - nice api" .nf fib3'
                   ,bench "fib4 - hylomorpic definition on leaf-trees" .nf fib4
+                  ,bench "fib5 - direct nat hylomorhism with explicite list based memoization" . nf fib5
                   ]
