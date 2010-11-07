@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes, DeriveFunctor, NoMonomorphismRestriction, ViewPatterns #-}
 
-import Control.Arrow
+import Control.Arrow ((&&&))
 import System.Random
 import Criterion.Main
 import Data.Monoid
@@ -41,7 +41,11 @@ histo phi = phi . fmap (ana $ forkFx (histo phi) out ) . out
 histo2 phi = outl . cata (In . forkFx phi id)
 
 
-fib,fib1,fib2,fib3,fib3',fib4 :: Int -> Int
+histoNat f g=  head . go where
+    go 0 = [g]
+    go n = let xs = go $ pred n in  f xs : xs
+
+fib,fib1,fib2,fib3,fib3',fib4,fib5 :: Int -> Int
 fib = (fibs !! ) where
     fibs = 1 : 1 : zipWith (+) (tail fibs) fibs
 
@@ -74,6 +78,10 @@ fib4 = hylo phi psi where
     psi n = T (n-1) (n-2)
     phi (L a) = a
     phi (T a b) = a + b
+
+fib5 = histoNat phi 1 where
+    phi [1]  = 1
+    phi (n1:n2:_) = n1 + n2
 
 toInt = cata phi where
     phi Z = 0
