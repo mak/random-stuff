@@ -19,18 +19,6 @@ typedef struct ret {
 
 void die(char *str) { perror(str);exit(1);}
 
-char sc[] =
-  "\x48\xbe\x43\x43\x43\x43\x43\x43\x43\x43"
-  "\x48\xbf\x42\x42\x42\x42\x42\x42\x42\x42"
-  "\x4d\x31\xc9"
-  "\x4d\x31\xc0"
-  "\xba\x07\x00\x00\x00"
-  "\xb9\x32\x00\x00\x00"
-  "\xb8\x09\x00\x00\x00"
-  "\x49\x89\xca"
-  "\x0f\x05"
-  "\xcc";
-
 
 ret_t * get_free_address(pid_t pid)
 {
@@ -80,39 +68,18 @@ ret_t * get_free_address(pid_t pid)
   return ret;
 }
 
-long map(pid_t pid) {
-  ret_t * x;
-  pid_t  pid;
+#define SPTR (sizeof(void*))
+
+long inject_scode(pid_t pid,char *sc,size_t size) {
+
   int status;
-  char *buff[48];
-  long *ptr = (long *)buff;
+  long *ptr;
+  size_t bsize = size % SPTR == 0 ? size : (size/SPTR+1)*SPTR;
+  char * buff = malloc(bsize);
   int i = 0;
+
   struct user_regs_struct old_regs;
   struct user_regs_struct regs;
-
-  x = get_free_address(pid);
-  if (!x) die("get_free_address() ");
-
-
-  printf("[+] Found nice niche @ %llx (size %llx)\n",x->addr,x->size);
-
-  /** inject shellcode for mapping **/
-
-  /*  64bit                       32bit
-     mov rsi, x->size      |  xor ebp, ebp
-     xor r9,r9             |  xor edi, edi
-     xor r8,r8             |  mov esi, 0x32
-     mov edx,0x7           |  mov edx, 0x7
-     mov ecx,0x32          |  mov ecx, x->size
-     mov rdi, x->addr      |  mov ebx, x->addr
-     mov r10,rcx
-     mov eax,0x09          |  mov eax, 0xc0
-     syscall               |  int 80h | call gs:0x10
-  */
-
-  //  ptrace5
-
-  printf("[+] Attemt to inject mmap shellcode (size: %d)\n",sizeof sc);
 
   if (ptrace(PTRACE_ATTACH,pid,NULL,NULL) < 0)
     die("ptrace(ATTACH)");
@@ -126,7 +93,9 @@ long map(pid_t pid) {
 
   // make place for shellcode...
   printf("[*] making place for shellcode\n");
-  for(i=0;i<sizeof buff;i+=sizeof(void*)){
+
+  ptr = (long*) buff;
+  for(i=0;i<bsize;i+=SPTR){
     *ptr = ptrace(PTRACE_PEEKTEXT,pid,rip+i,NULL);
     ptr++;
   }
@@ -135,18 +104,10 @@ long map(pid_t pid) {
   if (ptrace(PTRACE_GETREGS,pid,NULL,&old_regs)<0)
     die("ptrace(SAVEREGS)");
 
-
-  // replace dummies with real value
-  ptr = (long*)memchr(sc,0x43,sizeof sc);
-  *ptr = x->size;
-  ptr = (long *) memchr(sc,0x42,sizeof sc);
-  *ptr = x->addr;
-
-
   ptr = (long *) sc;
   printf("[+] Copy mmap shellcode... \n");
   //copy shellcode
-  for(i=0;i<sizeof buff;i+=sizeof(void*))
+  for(i=0;i<bsize;i+=SPTR)
     if(ptrace(PTRACE_POKETEXT,pid,rip+i,*ptr++) < 0)
       die("ptrace(POKE_SHELL)");
 
@@ -164,11 +125,10 @@ long map(pid_t pid) {
   if((void*)regs.rax == MAP_FAILED)
     die("[-] mmap() failed :(");
 
-  printf("[+] mapped new area @ %llx\n",regs.rax);
 
   // restore code
   ptr = (long *) buff;
-  for(i=0;i<sizeof buff;i+=sizeof(void*))
+  for(i=0;i<bsize;i+=SPTR)
     if ( ptrace(PTRACE_POKETEXT,pid,rip+i,*ptr++) <0)
       die("ptrace(RESOTRE)");
 
@@ -182,13 +142,109 @@ long map(pid_t pid) {
   if(ptrace(PTRACE_DETACH,pid,NULL,NULL))
     die("ptrace(DETACH)");
 
-  return regs.rax
+  free(buff);
+  return regs.rax;
 }
+
+long ptrace_mmap(pid_t pid)
+{
+  long *ptr;
+  ret_t * x;
+  char sc[] =
+    "\x48\xbe\x43\x43\x43\x43\x43\x43\x43\x43"
+    "\x48\xbf\x42\x42\x42\x42\x42\x42\x42\x42"
+    "\x4d\x31\xc9"
+    "\x4d\x31\xc0"
+    "\xba\x07\x00\x00\x00"
+    "\xb9\x32\x00\x00\x00"
+    "\xb8\x09\x00\x00\x00"
+    "\x49\x89\xca"
+    "\x0f\x05"
+    "\xcc";
+
+
+
+  x = get_free_address(pid);
+  if (!x) die("get_free_address() ");
+
+  printf("[+] Found nice niche @ %llx (size %llx)\n",x->addr,x->size);
+  printf("[+] Attemt to inject mmap shellcode (size: %d)\n",sizeof sc);
+  // replace dummies with real value
+  ptr = (long*)memchr(sc,0x43,sizeof sc);
+  *ptr = x->size;
+  ptr = (long *) memchr(sc,0x42,sizeof sc);
+  *ptr = x->addr;
+
+  /** inject shellcode for mapping **/
+
+  /*  64bit                       32bit
+     mov rsi, x->size      |  xor ebp, ebp
+     xor r9,r9             |  xor edi, edi
+     xor r8,r8             |  mov esi, 0x32
+     mov edx,0x7           |  mov edx, 0x7
+     mov ecx,0x32          |  mov ecx, x->size
+     mov rdi, x->addr      |  mov ebx, x->addr
+     mov r10,rcx
+     mov eax,0x09          |  mov eax, 0xc0
+     syscall               |  int 80h | call gs:0x10
+  */
+  return inject_scode(pid,sc,sizeof sc);
+}
+
+
+long ptrace_mmapfd(pid_t pid,char *path)
+{
+  FILE * fd;
+  long curr;
+  if ((fd= fopen(path,"r")) < 0)
+    die("fopen(): ");
+
+  if(fseek(fd,0,SEEK_END) < 0)
+    die("fseek(): ");
+
+  if ((curr= ftell(fd)) < 0)
+    die("ftell(): ");
+
+  fclose(fd);
+
+  printf("[*] File size %d\n",curr);
+
+  int f = open(path,0,0);
+  //printf("[+] Attemt to inject mmap shellcode (size: %d)\n",sizeof sc);
+
+  /** inject shellcode for mapping **/
+
+  /*  64bit            32bit
+     call end
+     begin:
+     xor rdx,rdx
+     xor rsi,rsi
+     mov rsi,file_path
+     mov rsi, x->size      |  xor ebp, ebp
+     xor r9,r9             |  xor edi, edi
+     xor r8,r8             |  mov esi, 0x32
+     mov edx,0x7           |  mov edx, 0x7
+     mov ecx,0x2           |  mov ecx, x->size
+     mov rdi, x->addr      |  mov ebx, x->addr
+     mov r10,rcx
+     mov eax,0x09          |  mov eax, 0xc0
+     syscall               |  int 80h | call gs:0x10
+     int3
+     jmp begin
+     /path/to/library.so\x00
+  */
+  //  return inject_scode(pid,sc,sizeof sc);
+}
+
+
+long
+
 int main(int argc,char **argv)
 {
   pid_t pid;
-  if (argc < 2) die("argv");
+  if (argc < 3) die("argv");
   pid = atoi(argv[1]);
   pid = pid == 0 ? getpid() : pid ;
-  mmap(pid);
+  //printf("[+] mapped new area @ %llx\n",ptrace_mmap(pid));
+  printf("[+] mapped new file @ %llx\n",ptrace_mmapfd(pid,argv[2]));
 }
