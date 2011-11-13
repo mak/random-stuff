@@ -195,14 +195,14 @@ long ptrace_mmap(pid_t pid)
 long ptrace_mmapfd(pid_t pid,char *path)
 {
   FILE * fd;
-  long curr;
+  size_t curr;
   if ((fd= fopen(path,"r")) < 0)
     die("fopen(): ");
 
   if(fseek(fd,0,SEEK_END) < 0)
     die("fseek(): ");
 
-  if ((curr= ftell(fd)) < 0)
+  if ((size= ftell(fd)) < 0)
     die("ftell(): ");
 
   fclose(fd);
@@ -215,23 +215,26 @@ long ptrace_mmapfd(pid_t pid,char *path)
   /** inject shellcode for mapping **/
 
   /*  64bit            32bit
-     call end
-     begin:
+                  call end
+                  begin:   |
+     pop rdi ; file_path
      xor rdx,rdx
      xor rsi,rsi
-     mov rsi,file_path
-     mov rsi, x->size      |  xor ebp, ebp
+     mov eax,0x2
+     sycall
+                  int3
+     mov rdi,rax
+     mov rsi, size         |  xor ebp, ebp
      xor r9,r9             |  xor edi, edi
-     xor r8,r8             |  mov esi, 0x32
+     xor r8,r8             |  mov esi, 0x2
      mov edx,0x7           |  mov edx, 0x7
      mov ecx,0x2           |  mov ecx, x->size
-     mov rdi, x->addr      |  mov ebx, x->addr
-     mov r10,rcx
+     mov r10,rcx           |  mov ebx, x->addr
      mov eax,0x09          |  mov eax, 0xc0
      syscall               |  int 80h | call gs:0x10
-     int3
-     jmp begin
-     /path/to/library.so\x00
+                  int3
+		  jmp begin
+		  /path/to/library.so\x00
   */
   //  return inject_scode(pid,sc,sizeof sc);
 }
