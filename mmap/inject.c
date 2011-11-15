@@ -70,7 +70,7 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
   else { die("UNKOWN BIT SIZE"); }
 
   bsize = size % SPTR == 0 ? size : (size/SPTR+1)*SPTR;
-  buff  = malloc(bsize);
+  buff  = malloc(bsize+SPTR);
 
   if (ptrace(PTRACE_ATTACH,pid,NULL,NULL) < 0)
     die("ptrace(ATTACH)");
@@ -86,8 +86,8 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
   printf("[*] making place for shellcode\n");
 
   ptr = (long*) buff;
-  for(i=0;i<bsize;i+=SPTR){
-    *ptr = ptrace(PTRACE_PEEKTEXT,pid,*pc+i+SPTR,NULL);
+  for(i=0;i<bsize+SPTR;i+=SPTR){
+    *ptr = ptrace(PTRACE_PEEKTEXT,pid,*pc+i,NULL);
     ptr++;
   }
 
@@ -106,56 +106,35 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
     die("SET_RIP");
 
 
-  // we will switch to debugger after each syscall
-
+  // we will switch to debugger after each int3
   while(int_count--) {
-    if (ptrace(PTRACE_SYSCALL,pid,NULL,NULL) < 0)
+    if (ptrace(PTRACE_CONT,pid,NULL,NULL) < 0)
       die("ptrace(CONT)") ;
 
     waitpid(pid,&status,0);
-    printf("get sig: %x\n",status);
-    /* if(WSTOPSIG(status)  != SIGTRAP) */
-    /*   die("uncool somthing interupted.."); */
-    if(!WIFSTOPPED(status) && !(WSTOPSIG(status) & 0x80))
+
+    if(WSTOPSIG(status)  != SIGTRAP)
       die("uncool somthing interupted..");
 
-
-
     if (ptrace(PTRACE_GETREGS,pid,NULL,&regs)<0)
       die("ptrace(SAVEREGS)");
-    printf("\nrip: %lx rax: %lx orgi_rax: %lx rcx: %lx rdx: %lx rdi: %lx rsi: %lx r8: %lx r9: %lx r10: %lx",
-	   regs.rip,regs.rax,regs.orig_rax,regs.rcx,regs.rdx,regs.rdi,regs.rsi,regs.r8,regs.r9,regs.r10);
-    long foo;
-    if (int_count == 1) {
 
-      printf("\nfile: %s\n",read_string(pid,regs.rdi));
-    }
-    if (ptrace(PTRACE_SYSCALL,pid,NULL,NULL) < 0)
-      die("ptrace(CONT)") ;
-
-    waitpid(pid,&status,0);
-    if(!WIFSTOPPED(status) && !(WSTOPSIG(status) & 0x80))
-      die("uncool2 somthing interupted..");
-
-    if (ptrace(PTRACE_GETREGS,pid,NULL,&regs)<0)
-      die("ptrace(SAVEREGS)");
-    printf("\nrip: %lx rax: %lx orgi_rax: %lx rcx: %lx rdx: %lx rdi: %lx rsi: %lx r8: %lx r9: %lx r10: %lx",
-	   regs.rip, regs.rax,regs.orig_rax,regs.rcx,regs.rdx,regs.rdi,regs.rsi,regs.r8,regs.r9,regs.r10);
-    /*
-    if(breaks[int_count-1].is_fault(*ret)) {
+    if(breaks[int_count].is_fault(*ret)) {
       e=1;
       break;
-      }*/
+    }
   }
+
+
   if(e != 0)
     printf("Sth wrong going down..\n");
   else
-    printf("\n done\n");
+    printf(" done.\n");
 
   // restore code
   ptr = (long *) buff;
-  for(i=0;i<bsize;i+=SPTR)
-    if ( ptrace(PTRACE_POKETEXT,pid,*pc+i+SPTR,*ptr++) <0)
+  for(i=0;i<bsize+SPTR;i+=SPTR)
+    if ( ptrace(PTRACE_POKETEXT,pid,*pc+i,*ptr++) <0)
       die("ptrace(RESOTRE)");
 
   // set rip and regs back
@@ -167,6 +146,6 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
 
   free(buff);
 
-  if(e !=0 ) breaks[int_count-1].report_fault(*ret);
+  if(e !=0 ) breaks[int_count].report_fault(*ret);
   return *ret;
 }

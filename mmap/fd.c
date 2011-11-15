@@ -18,6 +18,13 @@ void open_report(long ret) {
   exit(1);
 }
 
+void close_report(long ret) {
+  errno = 0 - ret;
+  perror("close(): ");
+  exit(1);
+}
+
+
 breakpoint mmap_break = {
   .name = "break after mmap",
   .is_fault = generic_fault,
@@ -30,6 +37,18 @@ breakpoint open_break = {
   .report_fault = open_report,
 };
 
+breakpoint close_break = {
+  .name = "break after close",
+  .is_fault = generic_fault,
+  .report_fault = close_report,
+};
+
+breakpoint end_break = {
+  .name = "break for read mmaped address",
+  .is_fault = generic_fault,
+  .report_fault = NULL,
+};
+
 
 long ptrace_mmapfd(pid_t pid,char *path)
 {
@@ -38,13 +57,13 @@ long ptrace_mmapfd(pid_t pid,char *path)
   long *ptr,ret;
 
   char sc64[] =
-    "\xe8\x37\x00\x00\x00"
+    "\xeb\x45"
     "\x5f"
     "\x48\x31\xd2"
     "\x48\x31\xf6"
     "\xb8\x02\x00\x00\x00"
     "\x0f\x05"
-    "\x90"
+    "\xcc"
     "\x49\x89\xc0"
     "\x48\xbe\x41\x41\x41\x41\x41\x41\x41\x00"
     "\x4d\x31\xc9"
@@ -54,16 +73,24 @@ long ptrace_mmapfd(pid_t pid,char *path)
     "\x49\x89\xca"
     "\xb8\x09\x00\x00\x00"
     "\x0f\x05"
-    "\x90"
-    "\xeb\xc7";
+    "\xcc"
+    "\x50"
+    "\x4c\x89\xc7"
+    "\xb8\x03\x00\x00\x00"
+    "\x0f\x05"
+    "\xcc"
+    "\x58"
+    "\xcc"
+    "\xe8\xb6\xff\xff\xff";
+
 
   char sc32[] = "";
 
   char *sce;
-  bit_type type =get_type(pid);
+  bit_type type = get_type(pid);
   char *sc =  type == BITS32 ? sc32 : sc64;
   size_t scsize = type == BITS32 ? sizeof sc32 : sizeof sc64;
-  breakpoint breaks[] = { mmap_break,open_break};
+  breakpoint breaks[] = { end_break,close_break,mmap_break,open_break};
 
   int fd = open(path,0,0);
   fstat(fd,&sb);
@@ -71,7 +98,6 @@ long ptrace_mmapfd(pid_t pid,char *path)
   printf("[*] Prepering shellcode for mmaping %s (size: %lu)\n",path,sb.st_size);
   printf("[*] Attemt to inject read_mmap shellcode (size: %lu)\n",scsize);
 
-  //mmap(NULL,sb.st_size,0x5,0x2,fd,0);
 
   // replace dumy
   ptr  = (long*) memchr(sc,0x41,scsize);
@@ -82,13 +108,10 @@ long ptrace_mmapfd(pid_t pid,char *path)
   memcpy(sce+scsize-1,path,strlen(path));
   sce[scsize+strlen(path)] = '\x00';
 
-  //long addr  = sce & 0xfffff000;
-  //mprotect(addr, (sce - addr) + scsize , 0x7);
-
   /** inject shellcode for mapping **/
 
   /*  64bit            32bit
-                  call end
+                  jmp end
                   begin:   |
      pop rdi ; file_path
      xor rdx,rdx
@@ -106,11 +129,14 @@ long ptrace_mmapfd(pid_t pid,char *path)
      mov r10,rcx           |  mov ebx, x->addr
      mov eax,0x09          |  mov eax, 0xc0
      syscall               |  int 80h | call gs:0x10
+     mov rdi, r8
+     mov eax, 0x3
+     syscall
                   int3
-		  jmp begin
+		  call begin
 		  /path/to/library.so\x00
   */
-  ret = inject_scode(pid,sce,scsize+strlen(path),type,breaks,2);
+  ret = inject_scode(pid,sce,scsize+strlen(path),type,breaks,4);
   free(sce);
   return ret;
 
