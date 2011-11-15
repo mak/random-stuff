@@ -1,0 +1,21 @@
+#ifndef _INCLUDE_INJECT_H_
+#define _INCLUDE_INJECT_H_
+
+
+typedef enum {
+  UNKNOWN = 0,
+  BITS32 = 32,
+  BITS64 = 64
+} bit_type;
+
+typedef struct breakpoint_t {
+  char * name;
+  int (*is_fault) (long);
+  void (*report_fault)(long);
+} breakpoint;
+
+long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint* break,int int_count);
+
+
+#endif
+
