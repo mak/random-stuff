@@ -46,7 +46,7 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
 
   int status;
   int SPTR = (sizeof(void*));
-  long *ptr,*ret,*pc;
+  long *ptr,*ret,*pc,nops;
   size_t bsize;
   char * buff;
   int i = 0,e=0;
@@ -55,16 +55,20 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
   struct user_regs_struct regs;
 
 #if  __WORDSIZE == 64
+#define MY_PC RIP
   if(type == BITS64){
     SPTR = 8;
     ret = &regs.rax;
     pc = &old_regs.rip;
+    nops= 0x9090909090909090;
   }
 #else
+#define MY_PC EIP
   if (type == BITS32){
     SPTR = 4;
     pc = &old_regs.eip;
     ret = &regs.eax;
+    nops = 0x90909090;
   }
 #endif
   else { die("UNKOWN BIT SIZE"); }
@@ -101,8 +105,8 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
   fflush(stdout);
   printf("[+] Executing... ");
 
-  ptrace(PTRACE_POKETEXT,pid,*pc,0x9090909090909090);
-  if (ptrace(PTRACE_POKEUSER, pid, sizeof(long)*RIP,*pc+1)<0)
+  ptrace(PTRACE_POKETEXT,pid,*pc,nops);
+  if (ptrace(PTRACE_POKEUSER, pid, sizeof(long)*MY_PC,*pc+1)<0)
     die("SET_RIP");
 
 
