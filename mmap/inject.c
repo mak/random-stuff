@@ -123,6 +123,9 @@ long inject_scode(pid_t pid,char *sc,size_t size,bit_type type,breakpoint * brea
     if (ptrace(PTRACE_GETREGS,pid,NULL,&regs)<0)
       die("ptrace(SAVEREGS)");
 
+    /* printf("\nintcout:%d\neip: %lx eax: %lx ebx: %lx ecx: %lx edx: %lx esi: %lx edi: %lx\n",int_count, */
+    /* 	   regs.eip,regs.eax,regs.ebx,regs.ecx,regs.edx,regs.esi,regs.edi); */
+
     if(breaks[int_count].is_fault(*ret)) {
       e=1;
       break;

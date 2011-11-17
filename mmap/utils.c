@@ -6,7 +6,7 @@
 void die(char *str) { perror(str);exit(1);}
 
 int generic_fault(long ret) {
-  return ret < 0 ? 1 : 0;
+  return ret < 0 ? (-4095 < ret ? 1 : 0) : 0;
 }
 
 bit_type get_type(pid_t pid) {
