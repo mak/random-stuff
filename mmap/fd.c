@@ -65,9 +65,10 @@ long ptrace_mmapfd(pid_t pid,char *path)
     "\xc0\x48\xbe\x41\x41\x41\x41\x41"
     "\x41\x41\x41\x48\x31\xff\x4d\x31"
     "\xc9\xb2\x05\xb1\x02\x49\x89\xca"
-    "\xb0\x09\x0f\x05\xcc\x50\x4c\x89"
-    "\xc7\xb0\x03\x0f\x05\xcc\x58\xcc"
-    "\xe8\xc5\xff\xff\xff";
+    "\xb0\x09\x48\x31\xc0\x0f\x05\xcc"
+    "\x50\x4c\x89\xc7\xb0\x03\x48\x31"
+    "\xc0\x0f\x05\xcc\x58\xcc\xe8\xc5"
+    "\xff\xff\xff\x90";
 
   char sc32[] =
     /* zero the shit out */
@@ -76,9 +77,10 @@ long ptrace_mmapfd(pid_t pid,char *path)
     "\xeb\x29\x5b\x31\xd2\x31\xc9\xb0"
     "\x05\xcd\x80\xcc\x89\xc7\xb9\x41"
     "\x41\x41\x41\x31\xed\x31\xdb\x31"
-    "\xf6\x46\x46\xb2\x05\xb0\xc0\xcd"
-    "\x80\xcc\x50\x89\xfb\xb0\x06\xcd"
-    "\x80\x58\xcc\xe8\xd2\xff\xff\xff";
+    "\xf6\x46\x46\xb2\x05\xb0\xc0\x31"
+    "\xc0\xcd\x80\xcc\x50\x89\xfb\xb0"
+    "\x06\x31\xc0\xcd\x80\x58\xcc\xe8"
+    "\xd2\xff\xff\xff";
 
 
   char *sce;
@@ -121,11 +123,13 @@ long ptrace_mmapfd(pid_t pid,char *path)
      mov dl,0x5            |  xor esi,esi
      mov cl,0x2            |  inc esi; inc esi;
      mov r10,rcx           |  mov dl, 0x5
+     xor rax,rax           |  xor eax,eax
      mov al,0x9            |  mov al, 0xc0
      syscall               |  int 80h | call gs:0x10
                   int3
      push rax              |  push eax
      mov rdi, r8           |  mov ebx,edi
+     xor rax, rax          |  xor eax,eax
      mov al, 0x3           |  mov al,0x6
      syscall               |  int 80h | call gs:0x10
                   int3
