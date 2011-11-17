@@ -76,28 +76,18 @@ long ptrace_mmap(pid_t pid)
   long *ptr;
   ret_t * x;
   char sc64[] =
-    "\x48\xbe\x43\x43\x43\x43\x43\x43\x43\x43"
-    "\x48\xbf\x42\x42\x42\x42\x42\x42\x42\x42"
-    "\x4d\x31\xc9"
-    "\x4d\x31\xc0"
-    "\xba\x07\x00\x00\x00"
-    "\xb9\x32\x00\x00\x00"
-    "\xb8\x09\x00\x00\x00"
-    "\x49\x89\xca"
-    "\x0f\x05"
-    "\x90";
+    "\x48\xbe\x41\x41\x41\x41\x41\x41"
+    "\x41\x41\x4d\x31\xc9\x4d\x31\xc0"
+    "\xb2\x07\xb1\x32\x48\xbf\x42\x42"
+    "\x42\x42\x42\x42\x42\x42\x49\x89"
+    "\xca\xb0\x09\x0f\x05\xcc"
 
   char sc32[] =
-    "\x31\xed"
-    "\x31\xff"
-    "\xbe\x32\x00\x00\x00"
-    "\xba\x07\x00\x00\x00"
-    "\xc1\xed\x0c"
-    "\xb9\x43\x43\x43\x43"
-    "\xbb\x42\x42\x42\x42"
-    "\xb8\xc0\x00\x00\x00"
-    "\xcd\x80"
-    "\x90";
+    "\x31\xed\x31\xff\x31\xf6\xff\xc6"
+    "\xd1\xe6\xff\xc6\xc1\xe6\x03\xff"
+    "\xc6\xd1\xe6\xb2\x07\xb9\x41\x41"
+    "\x41\x41\xbb\x42\x42\x42\x42\xb0"
+    "\xc0\xcd\x80\xcc"
 
   bit_type type =get_type(pid);
   char *sc =  type == BITS32 ? sc32 : sc64;
@@ -121,13 +111,16 @@ long ptrace_mmap(pid_t pid)
   /*  64bit                       32bit
      mov rsi, x->size      |  xor ebp, ebp
      xor r9,r9             |  xor edi, edi
-     xor r8,r8             |  mov esi, 0x32
+     xor r8,r8             |  mov esi, 0x32 ; no null[1]
      mov edx,0x7           |  mov edx, 0x7
      mov ecx,0x32          |  mov ecx, x->size
      mov rdi, x->addr      |  mov ebx, x->addr
      mov r10,rcx           |  shr ebp, 0xc
      mov eax,0x09          |  mov eax, 0xc0
      syscall               |  int 80h | call gs:0x10
+
+  [1] xor esi,esi ; inc esi ; shl esi,1 ;inc esi; shl esi,3;inc esi ;shl esi,1
+      esi=0;esi++;esi<<1;esi++;esi<<3;esi++;esi<<1
   */
   free(x);
   return inject_scode(pid,sc,scsize,type,breaks,1);

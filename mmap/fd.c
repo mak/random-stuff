@@ -57,34 +57,23 @@ long ptrace_mmapfd(pid_t pid,char *path)
   long *ptr,ret;
 
   char sc64[] =
-    "\xeb\x45"
-    "\x5f"
-    "\x48\x31\xd2"
-    "\x48\x31\xf6"
-    "\xb8\x02\x00\x00\x00"
-    "\x0f\x05"
-    "\xcc"
-    "\x49\x89\xc0"
-    "\x48\xbe\x41\x41\x41\x41\x41\x41\x41\x00"
-    "\x4d\x31\xc9"
-    "\x48\x31\xff"
-    "\xba\x05\x00\x00\x00"
-    "\xb9\x02\x00\x00\x00"
-    "\x49\x89\xca"
-    "\xb8\x09\x00\x00\x00"
-    "\x0f\x05"
-    "\xcc"
-    "\x50"
-    "\x4c\x89\xc7"
-    "\xb8\x03\x00\x00\x00"
-    "\x0f\x05"
-    "\xcc"
-    "\x58"
-    "\xcc"
-    "\xe8\xb6\xff\xff\xff";
+    "\xeb\x36\x5f\x48\x31\xd2\x48\x31"
+    "\xf6\xb0\x02\x0f\x05\xcc\x49\x89"
+    "\xc0\x48\xbe\x41\x41\x41\x41\x41"
+    "\x41\x41\x41\x48\x31\xff\x4d\x31"
+    "\xc9\xb2\x05\xb1\x02\x49\x89\xca"
+    "\xb0\x09\x0f\x05\xcc\x50\x4c\x89"
+    "\xc7\xb0\x03\x0f\x05\xcc\x58\xcc"
+    "\xe8\xc5\xff\xff\xff"
 
+  char sc32[] =
+    "\xeb\x29\x5b\x31\xd2\x31\xc9\xb0"
+    "\x05\xcd\x80\xcc\x89\xc7\xb9\x41"
+    "\x41\x41\x41\x31\xed\x31\xdb\x31"
+    "\xf6\x46\x46\xb2\x05\xb0\xc0\xcd"
+    "\x80\xcc\x50\x89\xfb\xb0\x06\xcd"
+    "\x80\x58\xcc\xe8\xd2\xff\xff\xff";
 
-  char sc32[] = "";
 
   char *sce;
   bit_type type = get_type(pid);
@@ -113,25 +102,28 @@ long ptrace_mmapfd(pid_t pid,char *path)
   /*  64bit            32bit
                   jmp end
                   begin:   |
-     pop rdi ; file_path
-     xor rdx,rdx
-     xor rsi,rsi
-     mov eax,0x2
-     syscall
-                  int3
-
-     mov r8, rax
-     mov rsi, size         |  xor ebp, ebp
-     xor rdi,rdi           |  xor edi, edi
-     xor r9,r9             |  mov esi, 0x2
-     mov edx,0x5           |  mov edx, 0x5
-     mov ecx,0x2           |  mov ecx, x->size
-     mov r10,rcx           |  mov ebx, x->addr
-     mov eax,0x09          |  mov eax, 0xc0
+     pop rdi ; file_path   |  pop ebx
+     xor rdx,rdx           |  xor edx,edx
+     xor rsi,rsi           |  xor ecx,ecx
+     mov al,0x2            |  mov al,0x5
      syscall               |  int 80h | call gs:0x10
-     mov rdi, r8
-     mov eax, 0x3
-     syscall
+                  int3
+     mov r8, rax           |  mov edi,eax
+     mov rsi, size         |  mov ecx, x->size
+     xor rdi,rdi           |  xor edi,edi
+     xor r9,r9             |  xor ebp,ebp
+     mov dl,0x5            |  xor esi,esi
+     mov cl,0x2            |  inc esi; inc esi;
+     mov r10,rcx           |  mov dl, 0x5
+     mov alx,0x9           |  mov al, 0xc0
+     syscall               |  int 80h | call gs:0x10
+                  int3
+     push rax              |  push eax
+     mov rdi, r8           |  mov ebx,edi
+     mov al, 0x3           |  mov al,0x6
+     syscall               |  int 80h | call gs:0x10
+                  int3
+     pop rax               |  pop  eax
                   int3
 		  call begin
 		  /path/to/library.so\x00
